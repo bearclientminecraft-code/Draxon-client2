@@ -52,9 +52,10 @@ public class ClickGuiScreen extends Screen {
         for (Module m : DraxonClient.modules.in(c)) if (q.isEmpty() || m.name.toLowerCase().contains(q)) l.add(m);
         return l;
     }
-    private static int settingsHeight(Module m) { int h = 3; for (Setting<?> s : m.settings) h += SettingRenderer.height(s) + 1; return h; }
+    private static int settingsHeight(Module m) { int h = 3; for (Setting<?> s : m.settings) if (s.isVisible()) h += SettingRenderer.height(s) + 1; return h; }
 
     @Override public void render(DrawContext c, int mx, int my, float delta) {
+        t.sync();
         long now = System.nanoTime(); float dt = Math.min((now - last) / 1e9f, 0.1f); last = now;
         if (!openKeyReleased && GLFW.glfwGetKey(client.getWindow().getHandle(), KeybindManager.GUI_KEY) != GLFW.GLFW_PRESS) openKeyReleased = true;
         open.update(dt, 14f); themeAnim.target = themeOpen ? 1 : 0; themeAnim.update(dt, 16f);
@@ -77,13 +78,13 @@ public class ClickGuiScreen extends Screen {
     private void drawSearch(DrawContext c, float al, int mx, int my) {
         int sx = searchX(), sy = searchY();
         RenderUtils.roundRect(c, sx, sy, SEARCH_W, 16, t.rad(), ThemeManager.argb(t.panel, t.op() * al));
-        RenderUtils.border(c, sx, sy, SEARCH_W, 16, ThemeManager.argb(searchFocus ? t.acc() : 0xFFFFFF, (searchFocus ? 0.6f : 0.08f) * al));
+        RenderUtils.border(c, sx, sy, SEARCH_W, 16, t.rad(), ThemeManager.argb(searchFocus ? t.acc() : 0xFFFFFF, (searchFocus ? 0.6f : 0.08f) * al));
         String shown = search.isEmpty() ? "Search modules..." : search + (searchFocus && System.currentTimeMillis() / 500 % 2 == 0 ? "_" : "");
         FontManager.draw(c, shown, sx + 6, sy + 4, ThemeManager.argb(search.isEmpty() ? t.disabled : t.text, al));
         if (!search.isEmpty()) FontManager.draw(c, "x", sx + SEARCH_W - 10, sy + 4, ThemeManager.argb(t.textDim, al));
         int gx = sx - 22; boolean over = mx >= gx && mx < gx + 16 && my >= sy && my < sy + 16;
         RenderUtils.roundRect(c, gx, sy, 16, 16, t.rad(), ThemeManager.argb(over || themeOpen ? t.secondary : t.panel, t.op() * al));
-        RenderUtils.border(c, gx, sy, 16, 16, ThemeManager.argb(themeOpen ? t.acc() : 0xFFFFFF, (themeOpen ? 0.6f : 0.08f) * al));
+        RenderUtils.border(c, gx, sy, 16, 16, t.rad(), ThemeManager.argb(themeOpen ? t.acc() : 0xFFFFFF, (themeOpen ? 0.6f : 0.08f) * al));
         Icons.draw(c, Category.MISC, gx + 1, sy + 1, themeOpen ? t.acc() : t.text, al);
     }
 
@@ -105,7 +106,7 @@ public class ClickGuiScreen extends Screen {
             if (action == 0) {
                 RenderUtils.glassPanel(c, px, py, PW, panelH(), t, al);
                 FontManager.draw(c, cat.label, px + 8, py + 7, ThemeManager.argb(t.text, al));
-                Icons.draw(c, cat, px + PW - 8 - Icons.SIZE, py + 4, t.text, al);
+                Icons.draw(c, cat, px + PW - 8 - Icons.SIZE, py + 4, ThemeManager.mix(t.text, t.flower, 0.6f), al);
                 c.enableScissor(px, py + HEAD, px + PW, py + panelH());
             }
             float y = py + HEAD - scroll[i]; float total = 0;
@@ -132,6 +133,7 @@ public class ClickGuiScreen extends Screen {
                     if (action == 0) c.enableScissor(px, Math.max(sy0, py + HEAD), px + PW, Math.max(Math.max(sy0, py + HEAD), Math.min(sy0 + sh, py + panelH())));
                     int cy = sy0 + 2;
                     for (Setting<?> s : m.settings) {
+                        if (!s.isVisible()) continue;
                         if (action == 0) r.draw(c, s, px + 8, cy, PW - 16, al * ex.value);
                         else if (ex.value > 0.9f && inPanel && !closing && r.click(s, px + 8, cy, PW - 16, mx, my, button)) { ConfigManager.markDirty(); return true; }
                         cy += SettingRenderer.height(s) + 1;

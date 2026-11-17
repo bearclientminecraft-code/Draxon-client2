@@ -15,7 +15,7 @@ public final class ConfigManager {
     public static void init() { EventBus.INSTANCE.subscribe(Events.ModuleToggle.class, e -> dirty = true); }
     public static void markDirty() { dirty = true; }
 
-    public static void writeSettings(JsonObject o, List<Setting<?>> l) { for (Setting<?> s : l) o.addProperty(s.name, s.serialize()); }
+    public static void writeSettings(JsonObject o, List<Setting<?>> l) { for (Setting<?> s : l) if (!(s instanceof dev.draxon.setting.LabelSetting)) o.addProperty(s.name, s.serialize()); }
     public static void readSettings(JsonObject o, List<Setting<?>> l) {
         for (Setting<?> s : l) if (o.has(s.name)) { try { s.deserialize(o.get(s.name).getAsString()); } catch (RuntimeException ignored) {} }
     }
@@ -34,20 +34,23 @@ public final class ConfigManager {
     }
     public static void saveTheme(ThemeManager t) { JsonObject o = new JsonObject(); writeSettings(o, t.settings); write("theme.json", o); }
     public static void loadTheme(ThemeManager t) { JsonObject o = read("theme.json"); if (o != null) readSettings(o, t.settings); }
-    public static void saveModules(ModuleManager mm) {
+    public static JsonObject exportModules(ModuleManager mm) {
         JsonObject root = new JsonObject();
         for (Module m : mm.all()) { JsonObject o = new JsonObject(); o.addProperty("enabled", m.isEnabled()); writeSettings(o, m.settings); root.add(m.name, o); }
-        write("modules.json", root);
+        return root;
     }
-    public static void loadModules(ModuleManager mm) {
-        JsonObject root = read("modules.json"); if (root == null) return;
+    /** Applies a modules JSON (modules.json or a profile). Invalid entries are skipped, values are clamped by the settings, then validate() runs. */
+    public static void importModules(ModuleManager mm, JsonObject root) {
         for (Module m : mm.all()) {
-            if (!root.has(m.name)) continue;
+            if (!root.has(m.name) || !root.get(m.name).isJsonObject()) continue;
             JsonObject o = root.getAsJsonObject(m.name);
             readSettings(o, m.settings);
-            if (o.has("enabled")) m.setEnabled(o.get("enabled").getAsBoolean());
+            m.validate();
+            if (o.has("enabled")) { try { m.setEnabled(o.get("enabled").getAsBoolean()); } catch (RuntimeException ignored) {} }
         }
     }
+    public static void saveModules(ModuleManager mm) { write("modules.json", exportModules(mm)); }
+    public static void loadModules(ModuleManager mm) { JsonObject root = read("modules.json"); if (root != null) importModules(mm, root); }
     public static void saveAll(ThemeManager t, ModuleManager mm) { saveTheme(t); saveModules(mm); dirty = false; }
     public static boolean isDirty() { return dirty; }
 }

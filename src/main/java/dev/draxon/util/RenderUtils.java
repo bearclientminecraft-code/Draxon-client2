@@ -2,18 +2,56 @@ package dev.draxon.util;
 import dev.draxon.gui.ThemeManager;
 import net.minecraft.client.gui.DrawContext;
 public class RenderUtils {
-    /** Allocation-free rounded rect built from horizontal strips. */
-    public static void roundRect(DrawContext c, int x, int y, int w, int h, int r, int color) {
-        r = Math.min(r, Math.min(w, h) / 2);
+    private static final float[][][] COV = new float[33][][], BCOV = new float[33][][];
+    private static final int[][] FULL = new int[33][];
+    private static void ensure(int r) {
+        if (COV[r] != null) return;
+        float[][] f = new float[r][r], b = new float[r][r]; int[] first = new int[r];
         for (int i = 0; i < r; i++) {
-            double dy = r - i - 0.5; int inset = (int) Math.round(r - Math.sqrt(r * r - dy * dy));
-            c.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
-            c.fill(x + inset, y + h - i - 1, x + w - inset, y + h - i, color);
+            first[i] = r;
+            for (int j = 0; j < r; j++) {
+                double d = Math.hypot(r - (j + 0.5), r - (i + 0.5));
+                float outer = (float) Math.max(0, Math.min(1, r - d + 0.5)), inner = (float) Math.max(0, Math.min(1, (r - 1) - d + 0.5));
+                f[i][j] = outer; b[i][j] = Math.max(0, outer - inner);
+                if (outer >= 0.999f && first[i] == r) first[i] = j;
+            }
         }
-        c.fill(x, y + r, x + w, y + h - r, color);
+        COV[r] = f; BCOV[r] = b; FULL[r] = first;
     }
+    private static int scale(int color, float k) { return ((int) ((color >>> 24) * k) << 24) | (color & 0xFFFFFF); }
+    /** Anti-aliased rounded rect: edge pixels get fractional alpha from analytic coverage. Tables are cached per radius; no per-frame allocation. */
+    public static void roundRect(DrawContext c, int x, int y, int w, int h, int r, int color) {
+        r = Math.min(Math.min(r, 32), Math.min(w, h) / 2);
+        if (r <= 0) { c.fill(x, y, x + w, y + h, color); return; }
+        ensure(r); float[][] cv = COV[r]; int[] first = FULL[r];
+        c.fill(x, y + r, x + w, y + h - r, color);
+        for (int i = 0; i < r; i++) {
+            int jf = first[i];
+            c.fill(x + jf, y + i, x + w - jf, y + i + 1, color);
+            c.fill(x + jf, y + h - 1 - i, x + w - jf, y + h - i, color);
+            for (int j = 0; j < jf; j++) {
+                float k = cv[i][j]; if (k <= 0.01f) continue; int col = scale(color, k);
+                c.fill(x + j, y + i, x + j + 1, y + i + 1, col); c.fill(x + w - 1 - j, y + i, x + w - j, y + i + 1, col);
+                c.fill(x + j, y + h - 1 - i, x + j + 1, y + h - i, col); c.fill(x + w - 1 - j, y + h - 1 - i, x + w - j, y + h - i, col);
+            }
+        }
+    }
+    /** 1px border that follows the (anti-aliased) rounded corners. */
+    public static void border(DrawContext c, int x, int y, int w, int h, int r, int color) {
+        r = Math.min(Math.min(r, 32), Math.min(w, h) / 2);
+        if (r <= 1) { border(c, x, y, w, h, color); return; }
+        ensure(r); float[][] bc = BCOV[r];
+        c.fill(x + r, y, x + w - r, y + 1, color); c.fill(x + r, y + h - 1, x + w - r, y + h, color);
+        c.fill(x, y + r, x + 1, y + h - r, color); c.fill(x + w - 1, y + r, x + w, y + h - r, color);
+        for (int i = 0; i < r; i++) for (int j = 0; j < r; j++) {
+            float k = bc[i][j]; if (k <= 0.02f) continue; int col = scale(color, k);
+            c.fill(x + j, y + i, x + j + 1, y + i + 1, col); c.fill(x + w - 1 - j, y + i, x + w - j, y + i + 1, col);
+            c.fill(x + j, y + h - 1 - i, x + j + 1, y + h - i, col); c.fill(x + w - 1 - j, y + h - 1 - i, x + w - j, y + h - i, col);
+        }
+    }
+    /** Plain square-cornered 1px border. */
     public static void border(DrawContext c, int x, int y, int w, int h, int color) {
-        c.fill(x + 1, y, x + w - 1, y + 1, color); c.fill(x + 1, y + h - 1, x + w - 1, y + h, color);
+        c.fill(x, y, x + w, y + 1, color); c.fill(x, y + h - 1, x + w, y + h, color);
         c.fill(x, y + 1, x + 1, y + h - 1, color); c.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
     }
     public static void shadow(DrawContext c, int x, int y, int w, int h, int r) {
@@ -21,7 +59,7 @@ public class RenderUtils {
     }
     /** Frosted-glass sheen: soft light gradient from the top edge plus a bright hairline. Approximation, not a real blur. */
     public static void frost(DrawContext c, int x, int y, int w, int h, int r, float intensity, float alpha) {
-        int inset = Math.max(2, r / 2);
+        int inset = Math.max(2, r);
         c.fillGradient(x + inset, y + 1, x + w - inset, y + h / 2, ThemeManager.argb(0xFFFFFF, 0.07f * intensity * alpha), ThemeManager.argb(0xFFFFFF, 0f));
         c.fill(x + inset, y, x + w - inset, y + 1, ThemeManager.argb(0xFFFFFF, 0.16f * intensity * alpha));
     }
@@ -29,7 +67,7 @@ public class RenderUtils {
         shadow(c, x, y, w, h, t.rad());
         roundRect(c, x, y, w, h, t.rad(), ThemeManager.argb(t.panel, t.op() * alpha));
         frost(c, x, y, w, h, t.rad(), t.frost.get().floatValue(), alpha);
-        border(c, x, y, w, h, ThemeManager.argb(0xFFFFFF, 0.08f * alpha));
+        border(c, x, y, w, h, t.rad(), t.border != 0 ? ThemeManager.argb(t.border, 0.55f * alpha) : ThemeManager.argb(0xFFFFFF, 0.08f * alpha));
     }
 
     public static void rectOutline(DrawContext c, int x0, int y0, int x1, int y1, int t, int color) {
@@ -52,7 +90,7 @@ public class RenderUtils {
     }
     public static void disc(DrawContext c, int cx, int cy, int r, int color) {
         if (r <= 0) { c.fill(cx, cy, cx + 1, cy + 1, color); return; }
-        for (int dy = -r; dy <= r; dy++) { int h = (int) Math.round(Math.sqrt(r * r - dy * dy)); c.fill(cx - h, cy + dy, cx + h + 1, cy + dy + 1, color); }
+        roundRect(c, cx - r, cy - r, 2 * r + 1, 2 * r + 1, r, color);
     }
     public static void ring(DrawContext c, int cx, int cy, int r, int color) {
         int ri = Math.max(0, r - 1);

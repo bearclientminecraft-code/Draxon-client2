@@ -3,10 +3,11 @@
 Client-side Fabric mod for Minecraft Java 1.21.11 (Java 21): glassmorphism ClickGUI, settings system, theme, config, event bus.
 
 ## Build
-Versions in `gradle.properties` are taken from https://fabricmc.net/develop (Minecraft 1.21.11, Yarn).
+Versions in `gradle.properties` are taken from https://fabricmc.net/develop (Minecraft 1.21.11, Yarn, Loader, Fabric API, Loom).
 
 - `./gradlew build` -> `build/libs/draxon-reborn-*.jar` (the remapped mod jar; the `-sources` jar is not the mod).
 - `./gradlew runClient` to test in a dev client.
+- `./gradlew genSources` to check mixin targets.
 
 Gradle/Loom 1.19 need a **Java 25** JVM to run the build; the mod classes are still compiled for **Java 21** (`options.release = 21`),
 which is what Minecraft 1.21.11 requires.
@@ -21,11 +22,18 @@ Gear button next to the search bar opens the Interface (theme) panel.
 
 ## Layout
 - `core` Draxon, DraxonClient, EventBus, Events, KeybindManager, ConfigManager
-- `module` Module, ModuleManager, Category; `module/demo` showcase modules (removable)
+- `module` Module, ModuleManager, Category  (no modules shipped: add yours with `ModuleManager.register(...)`)
 - `setting` Boolean/Number/Mode/Color/Keybind/String/Multi settings
 - `gui` ClickGuiScreen, SettingRenderer, ThemeManager, FontManager, AnimationManager, Icons
 - `util` RenderUtils
-- `wip/render-phase` unfinished Render category sources, NOT compiled
 
 Config is stored in `config/draxon/` (`theme.json`, `modules.json`, optional `fonts.txt`).
 Fonts: Instrument Sans (SIL OFL), see `assets/draxon/font/OFL-InstrumentSans.txt`.
+
+## Combat / Sword (added)
+Systems (`dev.draxon.combat`): `TargetManager`, `RotationManager`, `DelayManager`, `CombatState`, `Geo`, `Keys`.
+Modules (`dev.draxon.module.combat`): Targets, TriggerBot, AimAssist, AutoClicker, W-Tap, S-Tap, SprintReset, Velocity, HitSelect, TargetStrafe, ShieldDisabler, AutoSprint.
+Velocity needs the mixin `dev.draxon.mixin.ClientPlayNetworkHandlerMixin` (`draxon.mixins.json`); verify its target with `./gradlew genSources`.
+
+Profiles (chat, never sent to the server): `.profile save|load|delete <name>`, `.profile list`, `.profile reset`, `.help`.
+Files: `config/draxon/modules.json` (autosave) and `config/draxon/profiles/<name>.json`.

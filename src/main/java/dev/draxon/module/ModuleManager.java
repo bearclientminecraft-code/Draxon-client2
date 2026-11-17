@@ -1,19 +1,32 @@
 package dev.draxon.module;
+import dev.draxon.combat.CombatState;
+import dev.draxon.combat.RotationManager;
 import dev.draxon.core.Draxon;
 import dev.draxon.core.EventBus;
 import dev.draxon.core.Events;
-import dev.draxon.module.demo.DemoModules;
 import java.util.*;
 public final class ModuleManager {
     private final List<Module> modules = new ArrayList<>();
     public ModuleManager() {
-        DemoModules.registerAll(this); // delete this line to start with an empty client
+        EventBus.INSTANCE.subscribe(Events.PreTick.class, e -> {
+            CombatState.update(e.client());
+            for (int i = 0; i < modules.size(); i++) {
+                Module m = modules.get(i);
+                if (!m.isEnabled()) continue;
+                try { m.onPreTick(e.client()); } catch (RuntimeException ex) { Draxon.LOGGER.error("Module " + m.name + " threw in onPreTick", ex); }
+            }
+        });
         EventBus.INSTANCE.subscribe(Events.Tick.class, e -> {
             for (int i = 0; i < modules.size(); i++) {
                 Module m = modules.get(i);
                 if (!m.isEnabled()) continue;
                 try { m.onTick(e.client()); } catch (RuntimeException ex) { Draxon.LOGGER.error("Module " + m.name + " threw in onTick", ex); }
             }
+            RotationManager.endTick(); // goal lifetime; the view itself moves per frame
+        });
+        EventBus.INSTANCE.subscribe(Events.Reset.class, e -> {
+            for (Module m : modules) { try { m.reset(); } catch (RuntimeException ex) { Draxon.LOGGER.error("Module " + m.name + " threw in reset", ex); } }
+            CombatState.reset(); RotationManager.clear();
         });
     }
     public void register(Module m) {

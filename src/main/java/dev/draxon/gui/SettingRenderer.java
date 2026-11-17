@@ -21,6 +21,8 @@ final class SettingRenderer {
         if (s instanceof StringSetting) return 26;
         if (s instanceof ColorSetting) return 14 + 3 * 9;
         if (s instanceof MultiSetting m) return 14 + m.options.length * 12;
+        if (s instanceof LabelSetting) return 13;
+        if (s instanceof ThemeSelectSetting) return Theme.ALL.length * 17 + 19;
         return 14;
     }
     boolean capturing() { return listening != null || typing != null; }
@@ -39,7 +41,7 @@ final class SettingRenderer {
             RenderUtils.roundRect(c, x + w - 16, y + 3, 16, 8, 4, ThemeManager.argb(mix(t.track, acc, k), a));
             RenderUtils.roundRect(c, x + w - 15 + (int) (8 * k), y + 4, 6, 6, 3, ThemeManager.argb(0xFFFFFF, a));
         } else if (s instanceof NumberSetting n) {
-            String v = fmt(n.get());
+            String v = fmt(n.get()) + n.unit;
             FontManager.draw(c, s.name, x, y + 1, dim);
             FontManager.draw(c, v, x + w - FontManager.width(v), y + 1, txt);
             int fill = Math.max(2, (int) (w * n.progress()));
@@ -53,12 +55,12 @@ final class SettingRenderer {
             String v = listening == s ? "..." : KeybindSetting.keyName(k.get()); int bw = FontManager.width(v) + 8;
             FontManager.draw(c, s.name, x, y + 3, dim);
             RenderUtils.roundRect(c, x + w - bw, y + 1, bw, 12, 3, ThemeManager.argb(t.secondary, a));
-            if (listening == s) RenderUtils.border(c, x + w - bw, y + 1, bw, 12, ThemeManager.argb(acc, a));
+            if (listening == s) RenderUtils.border(c, x + w - bw, y + 1, bw, 12, 3, ThemeManager.argb(acc, a));
             FontManager.draw(c, v, x + w - bw + 4, y + 3, txt);
         } else if (s instanceof StringSetting st) {
             FontManager.draw(c, s.name, x, y + 1, dim);
             RenderUtils.roundRect(c, x, y + 11, w, 13, 3, ThemeManager.argb(t.secondary, a));
-            if (typing == s) RenderUtils.border(c, x, y + 11, w, 13, ThemeManager.argb(acc, a));
+            if (typing == s) RenderUtils.border(c, x, y + 11, w, 13, 3, ThemeManager.argb(acc, a));
             String v = st.get(); boolean cursor = typing == s && System.currentTimeMillis() / 500 % 2 == 0;
             while (v.length() > 1 && FontManager.width(v) > w - 12) v = v.substring(1);
             if (v.isEmpty() && typing != s) FontManager.draw(c, "...", x + 4, y + 14, ThemeManager.argb(t.disabled, a));
@@ -66,7 +68,7 @@ final class SettingRenderer {
         } else if (s instanceof ColorSetting cs) {
             FontManager.draw(c, s.name, x, y + 3, dim);
             RenderUtils.roundRect(c, x + w - 16, y + 2, 16, 10, 3, ThemeManager.argb(cs.get(), a));
-            RenderUtils.border(c, x + w - 16, y + 2, 16, 10, ThemeManager.argb(0xFFFFFF, 0.2f * a));
+            RenderUtils.border(c, x + w - 16, y + 2, 16, 10, 3, ThemeManager.argb(0xFFFFFF, 0.2f * a));
             for (int i = 0; i < 3; i++) bar(c, x, y + 14 + i * 9, w, i, cs, a);
         } else if (s instanceof MultiSetting m) {
             FontManager.draw(c, s.name, x, y + 3, dim);
@@ -76,6 +78,29 @@ final class SettingRenderer {
                 RenderUtils.roundRect(c, x, oy + 2, 8, 8, 2, ThemeManager.argb(mix(t.secondary, acc, k), a));
                 FontManager.draw(c, o, x + 12, oy + 2, m.has(o) ? txt : dim);
             }
+        } else if (s instanceof LabelSetting) {
+            FontManager.draw(c, s.name, x, y + 3, ThemeManager.argb(acc, a));
+            c.fill(x + FontManager.width(s.name) + 4, y + 7, x + w, y + 8, ThemeManager.argb(acc, 0.25f * a));
+        } else if (s instanceof ThemeSelectSetting ts) {
+            for (int i = 0; i < Theme.ALL.length; i++) {
+                Theme th = Theme.ALL[i]; int ry = y + i * 17; boolean on = th.name().equals(ts.get());
+                RenderUtils.roundRect(c, x, ry, w, 15, 4, ThemeManager.argb(th.bg(), 0.95f * a));
+                RenderUtils.border(c, x, ry, w, 15, 4, ThemeManager.argb(on ? th.accent() : 0xFFFFFF, (on ? 0.95f : 0.10f) * a));
+                RenderUtils.roundRect(c, x + 5, ry + 4, 7, 7, 3, ThemeManager.argb(th.accent(), a));
+                Glyphs.draw(c, Glyphs.FLOWER, x + 16, ry + 4, th.flower(), a);
+                FontManager.draw(c, th.name(), x + 28, ry + 3, txt);
+                if (on) Glyphs.draw(c, Glyphs.CHECK, x + w - 12, ry + 4, th.accent(), a);
+            }
+            int ry = y + Theme.ALL.length * 17 + 2; boolean on = ts.isCustom();
+            RenderUtils.roundRect(c, x, ry, w, 15, 4, ThemeManager.argb(on ? t.panel : t.secondary, 0.95f * a));
+            RenderUtils.border(c, x, ry, w, 15, 4, ThemeManager.argb(on ? t.acc() : 0xFFFFFF, (on ? 0.95f : 0.10f) * a));
+            RenderUtils.roundRect(c, x + 4, ry + 4, 7, 7, 3, ThemeManager.argb(on ? t.acc() : 0x8B5CF6, a));
+            RenderUtils.roundRect(c, x + 9, ry + 4, 7, 7, 3, ThemeManager.argb(on ? t.panel : 0x14141C, a));
+            RenderUtils.border(c, x + 9, ry + 4, 7, 7, 3, ThemeManager.argb(0xFFFFFF, 0.25f * a));
+            FontManager.draw(c, "Custom", x + 21, ry + 3, txt);
+            c.getMatrices().pushMatrix(); c.getMatrices().translate(x + w - 5, ry + 5); c.getMatrices().scale(0.75f, 0.75f);
+            FontManager.draw(c, "Edit below", -FontManager.width("Edit below"), 0, dim);
+            c.getMatrices().popMatrix();
         }
     }
     private void bar(DrawContext c, int x, int y, int w, int mode, ColorSetting cs, float a) {
@@ -104,6 +129,8 @@ final class SettingRenderer {
             for (int i = 0; i < 3; i++) if (hit(mx, my, x, y + 13 + i * 9, w, 9)) { dragging = s; dragPart = i + 1; dragX = x; dragW = w; dragTo(mx); }
         } else if (s instanceof MultiSetting m) {
             for (int i = 0; i < m.options.length; i++) if (hit(mx, my, x, y + 14 + i * 12, w, 12)) m.toggle(m.options[i]);
+        } else if (s instanceof ThemeSelectSetting ts) {
+            if (button == 0) { int rel = my - y; if (rel >= Theme.ALL.length * 17) ts.set(ThemeSelectSetting.CUSTOM); else ts.set(Theme.ALL[Math.max(0, rel / 17)].name()); }
         }
         return true;
     }
