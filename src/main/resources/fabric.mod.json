@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "draxon",
+  "version": "${version}",
+  "name": "Draxon Reborn",
+  "description": "Draxon Reborn V1 base client: glassmorphism ClickGUI, settings, themes, config.",
+  "authors": ["Draxon"],
+  "environment": "client",
+  "entrypoints": { "client": ["dev.draxon.core.DraxonClient"] },
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.11", "java": ">=21", "fabric-api": "*" }
+}
