@@ -30,6 +30,8 @@ public class ClickGuiScreen extends Screen {
 
     public ClickGuiScreen() { super(Text.literal("Draxon")); open.target = 1; }
     @Override public boolean shouldPause() { return false; }
+    /** The vanilla menu blur is skipped unless enabled in the Interface panel (it is very expensive on phones). The dark overlay is drawn in render(). */
+    @Override public void renderBackground(DrawContext c, int mx, int my, float delta) { if (t.blur.get()) super.renderBackground(c, mx, my, delta); }
     /** ESC and Right Shift both end here: fade out, then setScreen(null). No other screen is opened. */
     @Override public void close() { closing = true; open.target = 0; }
 
@@ -47,11 +49,19 @@ public class ClickGuiScreen extends Screen {
     private int themeX() { return (width - THEME_W) / 2; }
 
     private Anim a(Map<Module, Anim> m, Module k, float init) { return m.computeIfAbsent(k, x -> new Anim(init)); }
-    private List<Module> visible(Category c) {
-        List<Module> l = new ArrayList<>(); String q = search.toLowerCase();
-        for (Module m : DraxonClient.modules.in(c)) if (q.isEmpty() || m.name.toLowerCase().contains(q)) l.add(m);
-        return l;
+    private final List<List<Module>> vis = new ArrayList<>();
+    private int lastCat, curMx = -9999, curMy = -9999;
+    /** Filtered module lists are rebuilt only when the search text changes (not every frame). */
+    private void rebuild() {
+        vis.clear(); String q = search.toLowerCase();
+        for (Category c : Category.values()) {
+            List<Module> l = new ArrayList<>();
+            for (Module m : DraxonClient.modules.in(c)) if (q.isEmpty() || m.name.toLowerCase().contains(q)) l.add(m);
+            vis.add(l);
+        }
     }
+    private List<Module> visible(Category c) { if (vis.isEmpty()) rebuild(); return vis.get(c.ordinal()); }
+    private int panelAt(int gx) { int ox = originX(); for (int i = 0; i < 5; i++) { int px = ox + i * (PW + GAP); if (gx >= px && gx < px + PW) return i; } return -1; }
     private static int settingsHeight(Module m) { int h = 3; for (Setting<?> s : m.settings) if (s.isVisible()) h += SettingRenderer.height(s) + 1; return h; }
 
     @Override public void render(DrawContext c, int mx, int my, float delta) {
@@ -67,7 +77,7 @@ public class ClickGuiScreen extends Screen {
         float sc = curScale();
         c.getMatrices().pushMatrix();
         c.getMatrices().translate(width / 2f, height / 2f); c.getMatrices().scale(sc, sc); c.getMatrices().translate(-width / 2f, -height / 2f);
-        int vmx = toGuiX(mx), vmy = toGuiY(my); r.dt = dt;
+        int vmx = toGuiX(mx), vmy = toGuiY(my); r.dt = dt; curMx = vmx; curMy = vmy;
         boolean modal = themeOpen;
         pass(c, modal ? -9999 : vmx, modal ? -9999 : vmy, al, dt, 0, 0);
         drawSearch(c, al, modal ? -9999 : vmx, modal ? -9999 : vmy);
@@ -117,11 +127,13 @@ public class ClickGuiScreen extends Screen {
                 int setBtnX = px + PW - 42, swX = px + PW - 28;
                 if (action == 0) {
                     tg.target = m.isEnabled() ? 1 : 0; hv.target = over ? 1 : 0; tg.update(dt, 18); hv.update(dt, 20); ex.update(dt, 14);
+                    if (ry + ROW > py + HEAD && ry < py + panelH()) { // rows scrolled out of the panel are not drawn at all
                     if (hv.value > 0.01f) RenderUtils.roundRect(c, px + 3, ry, PW - 6, ROW - 1, 4, ThemeManager.argb(t.secondary, 0.9f * hv.value * al));
                     FontManager.draw(c, m.name, px + 8, ry + 4, ThemeManager.argb(m.isEnabled() ? t.text : t.textDim, al));
                     FontManager.draw(c, "...", setBtnX, ry + 3, ThemeManager.argb(ex.target > 0.5f ? t.acc() : t.disabled, al));
                     RenderUtils.roundRect(c, swX, ry + 3, 20, 10, 5, ThemeManager.argb(SettingRenderer.mix(t.track, t.acc(), tg.value), al));
                     RenderUtils.roundRect(c, swX + 1 + (int) (10 * tg.value), ry + 4, 8, 8, 4, ThemeManager.argb(0xFFFFFF, al));
+                    }
                 } else if (over && !closing) {
                     if (button == 1 || (mx >= setBtnX && mx < setBtnX + 14)) { ex.target = ex.target > 0.5f ? 0 : 1; return true; }
                     if (button == 0) { m.toggle(); return true; }
@@ -130,15 +142,16 @@ public class ClickGuiScreen extends Screen {
                 int sh = (int) (settingsHeight(m) * ex.value);
                 if (sh > 0) {
                     int sy0 = (int) y;
-                    if (action == 0) c.enableScissor(px, Math.max(sy0, py + HEAD), px + PW, Math.max(Math.max(sy0, py + HEAD), Math.min(sy0 + sh, py + panelH())));
+                    boolean setVis = action != 0 || (sy0 + sh > py + HEAD && sy0 < py + panelH());
+                    if (action == 0 && setVis) c.enableScissor(px, Math.max(sy0, py + HEAD), px + PW, Math.max(Math.max(sy0, py + HEAD), Math.min(sy0 + sh, py + panelH())));
                     int cy = sy0 + 2;
                     for (Setting<?> s : m.settings) {
                         if (!s.isVisible()) continue;
-                        if (action == 0) r.draw(c, s, px + 8, cy, PW - 16, al * ex.value);
+                        if (action == 0) { if (setVis && cy + SettingRenderer.height(s) > py + HEAD && cy < py + panelH()) r.draw(c, s, px + 8, cy, PW - 16, al * ex.value); }
                         else if (ex.value > 0.9f && inPanel && !closing && r.click(s, px + 8, cy, PW - 16, mx, my, button)) { ConfigManager.markDirty(); return true; }
                         cy += SettingRenderer.height(s) + 1;
                     }
-                    if (action == 0) c.disableScissor();
+                    if (action == 0 && setVis) c.disableScissor();
                     y += sh; total += sh;
                 }
             }
@@ -163,7 +176,7 @@ public class ClickGuiScreen extends Screen {
         }
         if (mx >= sx && mx < sx + SEARCH_W && my >= sy && my < sy + 16) {
             r.clearFocus(); searchFocus = true;
-            if (!search.isEmpty() && mx > sx + SEARCH_W - 14) search = "";
+            if (!search.isEmpty() && mx > sx + SEARCH_W - 14) { search = ""; rebuild(); }
             return true;
         }
         searchFocus = false; r.clearFocus();
@@ -177,7 +190,7 @@ public class ClickGuiScreen extends Screen {
     @Override public boolean mouseScrolled(double mx, double my, double h, double v) {
         if (themeOpen) return true;
         int gx = toGuiX(mx), ox = originX();
-        for (int i = 0; i < 5; i++) { int px = ox + i * (PW + GAP); if (gx >= px && gx < px + PW) scrollTarget[i] -= (float) v * 20; }
+        for (int i = 0; i < 5; i++) { int px = ox + i * (PW + GAP); if (gx >= px && gx < px + PW) { scrollTarget[i] -= (float) v * 20; lastCat = i; } }
         return true;
     }
     @Override public boolean keyPressed(KeyInput input) {
@@ -185,8 +198,18 @@ public class ClickGuiScreen extends Screen {
         if (r.capturing()) { r.key(k); return true; }
         if (k == GLFW.GLFW_KEY_ESCAPE) { close(); return true; }
         if (searchFocus) {
-            if (k == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) { search = search.substring(0, search.length() - 1); return true; }
+            if (k == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) { search = search.substring(0, search.length() - 1); rebuild(); return true; }
             if (k == GLFW.GLFW_KEY_ENTER) { searchFocus = false; return true; }
+        }
+        // Up / Down / Page Up / Page Down / Home / End scroll the module list under the cursor (or the last used one)
+        if (k == GLFW.GLFW_KEY_UP || k == GLFW.GLFW_KEY_DOWN || k == GLFW.GLFW_KEY_PAGE_UP || k == GLFW.GLFW_KEY_PAGE_DOWN || k == GLFW.GLFW_KEY_HOME || k == GLFW.GLFW_KEY_END) {
+            if (themeOpen) return true;
+            int i = panelAt(curMx); if (i < 0) i = lastCat; lastCat = i;
+            float page = panelH() - HEAD - ROW;
+            if (k == GLFW.GLFW_KEY_UP) scrollTarget[i] -= 24; else if (k == GLFW.GLFW_KEY_DOWN) scrollTarget[i] += 24;
+            else if (k == GLFW.GLFW_KEY_PAGE_UP) scrollTarget[i] -= page; else if (k == GLFW.GLFW_KEY_PAGE_DOWN) scrollTarget[i] += page;
+            else if (k == GLFW.GLFW_KEY_HOME) scrollTarget[i] = 0; else scrollTarget[i] = 1e9f; // clamped in render()
+            return true;
         }
         // ignore the key repeat of the Right Shift press that opened the GUI until it has been released once
         if (k == KeybindManager.GUI_KEY) { if (openKeyReleased) close(); return true; }
@@ -195,7 +218,7 @@ public class ClickGuiScreen extends Screen {
     @Override public boolean charTyped(CharInput input) {
         String s = input.asString();
         if (r.typed(s)) return true;
-        if (searchFocus) { if (search.length() < 24) search += s; return true; }
+        if (searchFocus) { if (search.length() < 24) { search += s; rebuild(); } return true; }
         return super.charTyped(input);
     }
     @Override public void removed() { r.clearFocus(); ConfigManager.saveAll(t, DraxonClient.modules); }

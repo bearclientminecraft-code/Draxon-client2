@@ -8,7 +8,11 @@ public final class ThemeManager {
     public final NumberSetting radius = new NumberSetting("Corner radius", 6, 0, 12, 1);
     public final NumberSetting scale = new NumberSetting("GUI scale", 1.0, 0.6, 1.6, 0.05);
     public final ModeSetting font = new ModeSetting("Font", "Sans", FontManager.names());
-    public final List<Setting<?>> settings = List.of(opacity, frost, radius, scale, font);
+    /** Menu background blur is expensive on weak GPUs (phones): off by default. */
+    public final BooleanSetting blur = new BooleanSetting("Background blur", false);
+    /** Hard-edged small shapes (switches, sliders, hover rows). Panel corners stay anti-aliased. */
+    public final BooleanSetting fastRender = new BooleanSetting("Fast rendering", true);
+    public final List<Setting<?>> settings = List.of(opacity, frost, radius, scale, font, blur, fastRender);
     /** Live palette, recomputed by sync() when the Themes module state changes. */
     public int background, panel, secondary, track, accentRgb, flower, border;
     public final int text = 0xE8EDF5, textDim = 0x929EAE, disabled = 0x687587;
@@ -30,6 +34,7 @@ public final class ThemeManager {
     }
     /** Cheap; call once per frame. Themes module disabled -> original Dark Glass palette. */
     public void sync() {
+        dev.draxon.util.RenderUtils.fast = fastRender.get();
         if (sel == null) return;
         boolean on = enabled.getAsBoolean(); String n = sel.get(); int a = cAccent.get(), p = cPanel.get();
         if (on == lastOn && n.equals(lastName) && a == lastA && p == lastP) return;

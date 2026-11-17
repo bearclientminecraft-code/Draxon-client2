@@ -10,16 +10,20 @@ final class ListPanel {
     static final int MAXR = 10, ROW_H = 14, HEAD = 17;
     final String title; final int glyph; NumberSetting xs, ys;
     final String[] left = new String[MAXR], right = new String[MAXR]; final int[] colors = new int[MAXR]; final boolean[] dim = new boolean[MAXR]; int count;
+    private int cw, ch; private boolean dirty = true; // layout cache: text widths are measured only when the rows change
     int rx, ry, rw, rh; // last drawn rect in GUI px (used for dragging)
     ListPanel(String title, int glyph) { this.title = title; this.glyph = glyph; }
-    void clear() { count = 0; }
-    void add(String l, String r, int color, boolean dimmed) { if (count < MAXR) { left[count] = l; right[count] = r; colors[count] = color; dim[count] = dimmed; count++; } }
+    void clear() { count = 0; dirty = true; }
+    void add(String l, String r, int color, boolean dimmed) { if (count < MAXR) { left[count] = l; right[count] = r; colors[count] = color; dim[count] = dimmed; count++; dirty = true; } }
 
     void draw(DrawContext c, ThemeManager t, float scale, int sw, int sh, boolean chatOpen) {
         if (count == 0 && !chatOpen) { rw = 0; return; }
-        int w = FontManager.width(title) + 30;
-        for (int i = 0; i < count; i++) w = Math.max(w, 7 + 10 + FontManager.width(left[i]) + 14 + FontManager.width(right[i]) + 7);
-        w = Math.max(w, 110); int h = HEAD + count * ROW_H + 5;
+        if (dirty) {
+            dirty = false; int m = FontManager.width(title) + 30;
+            for (int i = 0; i < count; i++) m = Math.max(m, 7 + 10 + FontManager.width(left[i]) + 14 + FontManager.width(right[i]) + 7);
+            cw = Math.max(m, 110); ch = HEAD + count * ROW_H + 5;
+        }
+        int w = cw, h = ch;
         int px = (int) Math.max(0, Math.min(sw - w * scale, xs.get() * sw)), py = (int) Math.max(0, Math.min(sh - h * scale, ys.get() * sh));
         c.getMatrices().pushMatrix(); c.getMatrices().translate(px, py); c.getMatrices().scale(scale, scale);
         RenderUtils.glassPanel(c, 0, 0, w, h, t, 1f);

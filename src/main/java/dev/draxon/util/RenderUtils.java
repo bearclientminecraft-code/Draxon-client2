@@ -2,60 +2,117 @@ package dev.draxon.util;
 import dev.draxon.gui.ThemeManager;
 import net.minecraft.client.gui.DrawContext;
 public class RenderUtils {
-    private static final float[][][] COV = new float[33][][], BCOV = new float[33][][];
-    private static final int[][] FULL = new int[33][];
-    private static void ensure(int r) {
-        if (COV[r] != null) return;
-        float[][] f = new float[r][r], b = new float[r][r]; int[] first = new int[r];
+    /** Set once per frame by ThemeManager.sync(): small shapes (radius <= 5) use the hard-edged variant, panels keep anti-aliased corners. */
+    public static boolean fast = true;
+
+    /** Precomputed corner geometry per radius. Every GUI element is a handful of fills, so the number of fills (not pixels) is what costs time. */
+    private static final class Shape {
+        int[][] solid;   // {rowFrom, rowTo, firstFullColumn} per run of equal rows (anti-aliased shape, 4 coverage levels)
+        int[][] aa;      // {col0, row0, col1, row1, level 1..3} merged partial-coverage rectangles of one corner
+        int[][] ring;    // same for the 1px border ring (levels 1..4)
+        int[][] hard;    // {rowFrom, rowTo, firstColumn} of the hard-edged (no AA) shape
+    }
+    private static final Shape[] SHAPES = new Shape[33];
+
+    private static Shape shape(int r) {
+        Shape sh = SHAPES[r]; if (sh != null) return sh;
+        int[][] lv = new int[r][r], rv = new int[r][r]; int[] full = new int[r], half = new int[r];
         for (int i = 0; i < r; i++) {
-            first[i] = r;
+            full[i] = r; half[i] = r;
             for (int j = 0; j < r; j++) {
                 double d = Math.hypot(r - (j + 0.5), r - (i + 0.5));
-                float outer = (float) Math.max(0, Math.min(1, r - d + 0.5)), inner = (float) Math.max(0, Math.min(1, (r - 1) - d + 0.5));
-                f[i][j] = outer; b[i][j] = Math.max(0, outer - inner);
-                if (outer >= 0.999f && first[i] == r) first[i] = j;
+                double outer = Math.max(0, Math.min(1, r - d + 0.5)), inner = Math.max(0, Math.min(1, (r - 1) - d + 0.5));
+                lv[i][j] = (int) Math.round(outer * 4); rv[i][j] = (int) Math.round(Math.max(0, outer - inner) * 2); // the 1px ring only needs 2 levels
+                if (lv[i][j] >= 4 && full[i] == r) full[i] = j;
+                if (outer >= 0.5 && half[i] == r) half[i] = j;
             }
         }
-        COV[r] = f; BCOV[r] = b; FULL[r] = first;
+        sh = new Shape();
+        for (int i = 0; i < r; i++) for (int j = full[i]; j < r; j++) lv[i][j] = 0; // solid part is drawn by the row runs
+        sh.solid = runs(full, r); sh.hard = runs(half, r);
+        sh.aa = merge(lv, r, 3); sh.ring = merge(rv, r, 2);
+        return SHAPES[r] = sh;
+    }
+    private static int[][] runs(int[] first, int r) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int i = 0; i < r; i++) {
+            if (!out.isEmpty() && out.get(out.size() - 1)[2] == first[i] && out.get(out.size() - 1)[1] == i) out.get(out.size() - 1)[1] = i + 1;
+            else out.add(new int[]{i, i + 1, first[i]});
+        }
+        return out.toArray(new int[0][]);
+    }
+    /** Merge equal-level pixels into rectangles: horizontal runs first, then identical runs of consecutive rows. */
+    private static int[][] merge(int[][] lv, int r, int maxLevel) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        for (int i = 0; i < r; i++) {
+            int j = 0;
+            while (j < r) {
+                int l = lv[i][j]; if (l <= 0 || l > maxLevel) { j++; continue; }
+                int e = j + 1; while (e < r && lv[i][e] == l) e++;
+                boolean merged = false;
+                for (int[] q : out) if (q[3] == i && q[0] == j && q[2] == e && q[4] == l) { q[3] = i + 1; merged = true; break; }
+                if (!merged) out.add(new int[]{j, i, e, i + 1, l});
+                j = e;
+            }
+        }
+        return out.toArray(new int[0][]);
     }
     private static int scale(int color, float k) { return ((int) ((color >>> 24) * k) << 24) | (color & 0xFFFFFF); }
-    /** Anti-aliased rounded rect: edge pixels get fractional alpha from analytic coverage. Tables are cached per radius; no per-frame allocation. */
-    public static void roundRect(DrawContext c, int x, int y, int w, int h, int r, int color) {
-        r = Math.min(Math.min(r, 32), Math.min(w, h) / 2);
+    private static int rad(int r, int w, int h) { return Math.min(Math.min(r, 32), Math.min(w, h) / 2); }
+
+    /** Hard-edged rounded rect (no anti-aliasing): a middle block plus one fill per run of equal rows at each end. */
+    public static void roundRectFast(DrawContext c, int x, int y, int w, int h, int r, int color) {
+        r = rad(r, w, h);
         if (r <= 0) { c.fill(x, y, x + w, y + h, color); return; }
-        ensure(r); float[][] cv = COV[r]; int[] first = FULL[r];
+        Shape sh = shape(r);
         c.fill(x, y + r, x + w, y + h - r, color);
-        for (int i = 0; i < r; i++) {
-            int jf = first[i];
-            c.fill(x + jf, y + i, x + w - jf, y + i + 1, color);
-            c.fill(x + jf, y + h - 1 - i, x + w - jf, y + h - i, color);
-            for (int j = 0; j < jf; j++) {
-                float k = cv[i][j]; if (k <= 0.01f) continue; int col = scale(color, k);
-                c.fill(x + j, y + i, x + j + 1, y + i + 1, col); c.fill(x + w - 1 - j, y + i, x + w - j, y + i + 1, col);
-                c.fill(x + j, y + h - 1 - i, x + j + 1, y + h - i, col); c.fill(x + w - 1 - j, y + h - 1 - i, x + w - j, y + h - i, col);
-            }
+        for (int[] g : sh.hard) {
+            c.fill(x + g[2], y + g[0], x + w - g[2], y + g[1], color);
+            c.fill(x + g[2], y + h - g[1], x + w - g[2], y + h - g[0], color);
         }
     }
-    /** 1px border that follows the (anti-aliased) rounded corners. */
+    /** Rounded rect with anti-aliased corners (4 coverage levels, merged into few rectangles). Corner radius is unchanged. */
+    public static void roundRect(DrawContext c, int x, int y, int w, int h, int r, int color) {
+        r = rad(r, w, h);
+        if (r <= 0) { c.fill(x, y, x + w, y + h, color); return; }
+        if (fast && r <= 5) { roundRectFast(c, x, y, w, h, r, color); return; }
+        Shape sh = shape(r);
+        c.fill(x, y + r, x + w, y + h - r, color);
+        for (int[] g : sh.solid) {
+            c.fill(x + g[2], y + g[0], x + w - g[2], y + g[1], color);
+            c.fill(x + g[2], y + h - g[1], x + w - g[2], y + h - g[0], color);
+        }
+        corners(c, x, y, w, h, sh.aa, color, 4);
+    }
+    private static void corners(DrawContext c, int x, int y, int w, int h, int[][] rects, int color, int levels) {
+        int last = -1, col = 0;
+        for (int[] q : rects) {
+            if (q[4] != last) { last = q[4]; col = q[4] >= levels ? color : scale(color, q[4] / (float) levels); }
+            c.fill(x + q[0], y + q[1], x + q[2], y + q[3], col);
+            c.fill(x + w - q[2], y + q[1], x + w - q[0], y + q[3], col);
+            c.fill(x + q[0], y + h - q[3], x + q[2], y + h - q[1], col);
+            c.fill(x + w - q[2], y + h - q[3], x + w - q[0], y + h - q[1], col);
+        }
+    }
+    /** 1px border that follows the rounded corners. */
     public static void border(DrawContext c, int x, int y, int w, int h, int r, int color) {
-        r = Math.min(Math.min(r, 32), Math.min(w, h) / 2);
+        r = rad(r, w, h);
         if (r <= 1) { border(c, x, y, w, h, color); return; }
-        ensure(r); float[][] bc = BCOV[r];
+        Shape sh = shape(r);
         c.fill(x + r, y, x + w - r, y + 1, color); c.fill(x + r, y + h - 1, x + w - r, y + h, color);
         c.fill(x, y + r, x + 1, y + h - r, color); c.fill(x + w - 1, y + r, x + w, y + h - r, color);
-        for (int i = 0; i < r; i++) for (int j = 0; j < r; j++) {
-            float k = bc[i][j]; if (k <= 0.02f) continue; int col = scale(color, k);
-            c.fill(x + j, y + i, x + j + 1, y + i + 1, col); c.fill(x + w - 1 - j, y + i, x + w - j, y + i + 1, col);
-            c.fill(x + j, y + h - 1 - i, x + j + 1, y + h - i, col); c.fill(x + w - 1 - j, y + h - 1 - i, x + w - j, y + h - i, col);
-        }
+        corners(c, x, y, w, h, sh.ring, color, 2);
     }
     /** Plain square-cornered 1px border. */
     public static void border(DrawContext c, int x, int y, int w, int h, int color) {
         c.fill(x, y, x + w, y + 1, color); c.fill(x, y + h - 1, x + w, y + h, color);
         c.fill(x, y + 1, x + 1, y + h - 1, color); c.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
     }
+    /** Soft drop shadow: three hard-edged layers (the old five anti-aliased layers cost ~600 fills per panel). */
     public static void shadow(DrawContext c, int x, int y, int w, int h, int r) {
-        for (int i = 1; i <= 5; i++) roundRect(c, x - i, y - i + 3, w + 2 * i, h + 2 * i, r + i, ThemeManager.argb(0x000000, 0.045f * (6 - i)));
+        roundRectFast(c, x - 5, y - 2, w + 10, h + 10, r + 5, ThemeManager.argb(0x000000, 0.07f));
+        roundRectFast(c, x - 3, y, w + 6, h + 6, r + 3, ThemeManager.argb(0x000000, 0.20f));
+        roundRectFast(c, x - 1, y + 2, w + 2, h + 2, r + 1, ThemeManager.argb(0x000000, 0.30f));
     }
     /** Frosted-glass sheen: soft light gradient from the top edge plus a bright hairline. Approximation, not a real blur. */
     public static void frost(DrawContext c, int x, int y, int w, int h, int r, float intensity, float alpha) {

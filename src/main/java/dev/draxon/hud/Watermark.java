@@ -22,7 +22,7 @@ final class Watermark {
     private static final String[][] texts = new String[2][8]; private static final int[][] icons = new int[2][8], widths = new int[2][8];
     private static final int[] counts = new int[2], rowW = new int[2];
     private static long lastRefresh; private static double prevX, prevZ; private static boolean prevInit; private static String version = "";
-    private static Field bossField; private static boolean bossTried;
+    private static Field bossField; private static boolean bossTried; private static long lastBoss; private static int bossCount;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
     private Watermark() {}
 
@@ -64,7 +64,7 @@ final class Watermark {
         refresh(mc, h);
         float s = h.scale.get().floatValue(); int pad = 4, rowH = 9 + pad * 2;
         float target = 4;
-        if (h.bossAdapt.get()) { int n = bossBarCount(mc); if (n > 0) target = bossBarBottom(n, sh) + 4; } // always overlaps horizontally: both are centered
+        if (h.bossAdapt.get()) { long ms = System.currentTimeMillis(); if (ms - lastBoss > 250) { lastBoss = ms; bossCount = bossBarCount(mc); } int n = bossCount; if (n > 0) target = bossBarBottom(n, sh) + 4; } // always overlaps horizontally: both are centered
         yAnim.target = target; yAnim.update(dt, 10f);
         c.getMatrices().pushMatrix(); c.getMatrices().translate(sw / 2f, yAnim.value); c.getMatrices().scale(s, s);
         int y = 0;

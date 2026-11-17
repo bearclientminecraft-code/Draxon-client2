@@ -19,7 +19,8 @@ public final class FontManager {
     private static final List<String> names = new ArrayList<>(List.of("Sans", "Sans Bold", VANILLA));
     private static final Map<String, Identifier> ids = new HashMap<>();
     private static final Map<String, Text> cache = new HashMap<>();
-    private static String cachedFor = "";
+    private static String cachedFor = "", widthFor = "";
+    private static final Map<String, Integer> widths = new HashMap<>();
     private FontManager() {}
     public static void init() {
         ids.put("Sans", Identifier.of("draxon", "sans")); ids.put("Sans Bold", Identifier.of("draxon", "sans_bold"));
@@ -51,8 +52,15 @@ public final class FontManager {
         else c.drawText(mc.textRenderer, styled(m, s), x, y, color, false);
     }
     public static int width(String s) {
-        MinecraftClient mc = MinecraftClient.getInstance(); String m = mode();
-        return (VANILLA.equals(m) || !ids.containsKey(m)) ? mc.textRenderer.getWidth(s) : mc.textRenderer.getWidth(styled(m, s));
+        String m = mode();
+        if (!m.equals(widthFor) || widths.size() > 4096) { widths.clear(); widthFor = m; }
+        Integer w = widths.get(s);
+        if (w == null) {
+            MinecraftClient mc = MinecraftClient.getInstance();
+            w = (VANILLA.equals(m) || !ids.containsKey(m)) ? mc.textRenderer.getWidth(s) : mc.textRenderer.getWidth(styled(m, s));
+            widths.put(s, w);
+        }
+        return w;
     }
 
     /** custom=false forces the vanilla font (used by the NameTags "Custom Font" option). */

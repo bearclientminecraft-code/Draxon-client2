@@ -25,6 +25,7 @@ public final class HudManager {
         MinecraftClient mc = MinecraftClient.getInstance();
         long now = System.nanoTime(); float dt = Math.min((now - last) / 1e9f, 0.1f); last = now;
         if (mc.player == null || mc.world == null || mc.options.hudHidden || DraxonClient.modules == null) return;
+        if (mc.currentScreen instanceof dev.draxon.gui.ClickGuiScreen) return; // the menu is a full-screen overlay: do not pay for the HUD behind it
         ThemeManager t = DraxonClient.theme; t.sync();
         HudModule h = DraxonClient.modules.get(HudModule.class); if (h == null || !h.isEnabled()) return;
         int sw = mc.getWindow().getScaledWidth(), sh = mc.getWindow().getScaledHeight(); float s = h.scale.get().floatValue();

@@ -15,7 +15,7 @@ import java.util.List;
 /** Glass notifications stacked downwards under the crosshair (screen center + offset). */
 public final class NotificationManager {
     public static final int SUCCESS = 0, WARNING = 1; private static final int NH = 26, WARN_COLOR = 0xF2B45A;
-    private static final class N { String title, desc; int type; float age; boolean leaving, placed; final Anim alpha = new Anim(0), pos = new Anim(0); }
+    private static final class N { String title, desc; int type; float age; boolean leaving, placed; int w; final Anim alpha = new Anim(0), pos = new Anim(0); }
     private static final List<N> list = new ArrayList<>();
     private NotificationManager() {}
     static void init() {
@@ -39,7 +39,8 @@ public final class NotificationManager {
             if (!n.leaving) idx++;
             float a = Math.max(0f, Math.min(1f, n.alpha.value)); if (a < 0.01f) continue;
             int accent = n.type == SUCCESS ? t.acc() : WARN_COLOR;
-            int w = Math.max(104, 34 + Math.max(FontManager.width(n.title), FontManager.width(n.desc)) + 8);
+            if (n.w == 0) n.w = Math.max(104, 34 + Math.max(FontManager.width(n.title), FontManager.width(n.desc)) + 8);
+            int w = n.w;
             float x = sw / 2f - w * s / 2f, y = sh / 2f + off + n.pos.value + (1f - a) * 8f;
             c.getMatrices().pushMatrix(); c.getMatrices().translate(x, y); c.getMatrices().scale(s, s);
             RenderUtils.glassPanel(c, 0, 0, w, NH, t, a);

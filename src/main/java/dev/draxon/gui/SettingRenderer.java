@@ -31,6 +31,12 @@ final class SettingRenderer {
     private float anim(Object key, float target) {
         Anim a = anims.computeIfAbsent(key, k -> new Anim(target)); a.target = target; a.update(dt, 20f); return a.value;
     }
+    private final Map<NumberSetting, Double> lastVal = new HashMap<>(); private final Map<NumberSetting, String> lastTxt = new HashMap<>();
+    private String valueText(NumberSetting n) {
+        double v = n.get(); Double p = lastVal.get(n);
+        if (p == null || p != v) { lastVal.put(n, v); lastTxt.put(n, fmt(v) + n.unit); }
+        return lastTxt.get(n);
+    }
     private static String fmt(double v) { return Math.abs(v - Math.rint(v)) < 1e-9 ? Long.toString(Math.round(v)) : String.format(Locale.ROOT, "%.2f", v); }
 
     void draw(DrawContext c, Setting<?> s, int x, int y, int w, float a) {
@@ -41,7 +47,7 @@ final class SettingRenderer {
             RenderUtils.roundRect(c, x + w - 16, y + 3, 16, 8, 4, ThemeManager.argb(mix(t.track, acc, k), a));
             RenderUtils.roundRect(c, x + w - 15 + (int) (8 * k), y + 4, 6, 6, 3, ThemeManager.argb(0xFFFFFF, a));
         } else if (s instanceof NumberSetting n) {
-            String v = fmt(n.get()) + n.unit;
+            String v = valueText(n);
             FontManager.draw(c, s.name, x, y + 1, dim);
             FontManager.draw(c, v, x + w - FontManager.width(v), y + 1, txt);
             int fill = Math.max(2, (int) (w * n.progress()));

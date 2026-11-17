@@ -37,3 +37,8 @@ Velocity needs the mixin `dev.draxon.mixin.ClientPlayNetworkHandlerMixin` (`drax
 
 Profiles (chat, never sent to the server): `.profile save|load|delete <name>`, `.profile list`, `.profile reset`, `.help`.
 Files: `config/draxon/modules.json` (autosave) and `config/draxon/profiles/<name>.json`.
+
+## Performance notes (GUI / HUD)
+- Menu background blur is off by default (Interface -> "Background blur"); it is the most expensive part of the screen on weak GPUs.
+- "Fast rendering" (Interface, on by default): switches, sliders, hover rows and other small shapes (radius <= 5) use hard-edged corners. Panel/pill corners stay anti-aliased with the same radius.
+- The HUD is not drawn while the ClickGUI is open. ClickGUI: Up/Down (24px), PageUp/PageDown, Home/End scroll the module list under the cursor (or the last used one).
