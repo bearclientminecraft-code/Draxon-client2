@@ -5,6 +5,7 @@ import dev.draxon.hud.HudManager;
 import dev.draxon.module.ModuleManager;
 import dev.draxon.module.combat.*;
 import dev.draxon.module.movement.*;
+import dev.draxon.module.player.*;
 import dev.draxon.module.misc.HudModule;
 import dev.draxon.module.misc.ThemesModule;
 import net.fabricmc.api.ClientModInitializer;
@@ -26,7 +27,9 @@ public class DraxonClient implements ClientModInitializer {
         modules.register(new WTap()); modules.register(new STap()); modules.register(new SprintReset());
         modules.register(new Velocity()); modules.register(new HitSelect()); modules.register(new TargetStrafe());
         modules.register(new ShieldDisabler()); modules.register(new AutoSprint());
+        modules.register(new AnchorMacro()); modules.register(new AutoInventoryTotem()); modules.register(new AutoHitCrystal());
         modules.register(new Sprint()); modules.register(new NoJumpDelay());
+        modules.register(new AutoAccept()); modules.register(new AutoRespawn()); modules.register(new AutoTool());
         ProfileManager.captureDefaults(modules);
         ConfigManager.loadModules(modules);
         HudManager.init();

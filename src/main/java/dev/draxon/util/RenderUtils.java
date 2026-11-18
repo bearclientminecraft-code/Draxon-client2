@@ -10,26 +10,29 @@ public class RenderUtils {
         int[][] solid;   // {rowFrom, rowTo, firstFullColumn} per run of equal rows (anti-aliased shape, 4 coverage levels)
         int[][] aa;      // {col0, row0, col1, row1, level 1..3} merged partial-coverage rectangles of one corner
         int[][] ring;    // same for the 1px border ring (levels 1..4)
-        int[][] hard;    // {rowFrom, rowTo, firstColumn} of the hard-edged (no AA) shape
+        int[][] solid2, aa2; // same as solid/aa with only 2 coverage levels: used for small shapes (radius <= 5) in Fast rendering
+        int[][] hard;    // {rowFrom, rowTo, firstColumn} of the hard-edged (no AA) shape, used by shadows only
     }
     private static final Shape[] SHAPES = new Shape[33];
 
     private static Shape shape(int r) {
         Shape sh = SHAPES[r]; if (sh != null) return sh;
-        int[][] lv = new int[r][r], rv = new int[r][r]; int[] full = new int[r], half = new int[r];
+        int[][] lv = new int[r][r], l2 = new int[r][r], rv = new int[r][r]; int[] full = new int[r], full2 = new int[r], half = new int[r];
         for (int i = 0; i < r; i++) {
-            full[i] = r; half[i] = r;
+            full[i] = r; full2[i] = r; half[i] = r;
             for (int j = 0; j < r; j++) {
                 double d = Math.hypot(r - (j + 0.5), r - (i + 0.5));
                 double outer = Math.max(0, Math.min(1, r - d + 0.5)), inner = Math.max(0, Math.min(1, (r - 1) - d + 0.5));
                 lv[i][j] = (int) Math.round(outer * 4); rv[i][j] = (int) Math.round(Math.max(0, outer - inner) * 2); // the 1px ring only needs 2 levels
+                l2[i][j] = (int) Math.round(outer * 2);
                 if (lv[i][j] >= 4 && full[i] == r) full[i] = j;
+                if (l2[i][j] >= 2 && full2[i] == r) full2[i] = j;
                 if (outer >= 0.5 && half[i] == r) half[i] = j;
             }
         }
         sh = new Shape();
-        for (int i = 0; i < r; i++) for (int j = full[i]; j < r; j++) lv[i][j] = 0; // solid part is drawn by the row runs
-        sh.solid = runs(full, r); sh.hard = runs(half, r);
+        for (int i = 0; i < r; i++) { for (int j = full[i]; j < r; j++) lv[i][j] = 0; for (int j = full2[i]; j < r; j++) l2[i][j] = 0; } // solid part is drawn by the row runs
+        sh.solid = runs(full, r); sh.solid2 = runs(full2, r); sh.hard = runs(half, r); sh.aa2 = merge(l2, r, 1);
         sh.aa = merge(lv, r, 3); sh.ring = merge(rv, r, 2);
         return SHAPES[r] = sh;
     }
@@ -71,18 +74,19 @@ public class RenderUtils {
             c.fill(x + g[2], y + h - g[1], x + w - g[2], y + h - g[0], color);
         }
     }
-    /** Rounded rect with anti-aliased corners (4 coverage levels, merged into few rectangles). Corner radius is unchanged. */
+    /** Rounded rect with anti-aliased corners (4 coverage levels, merged into few rectangles). Small shapes use 2 levels in Fast rendering; the radius is never changed. */
     public static void roundRect(DrawContext c, int x, int y, int w, int h, int r, int color) {
         r = rad(r, w, h);
         if (r <= 0) { c.fill(x, y, x + w, y + h, color); return; }
-        if (fast && r <= 5) { roundRectFast(c, x, y, w, h, r, color); return; }
         Shape sh = shape(r);
+        boolean two = fast && r <= 5;
+        int[][] solid = two ? sh.solid2 : sh.solid;
         c.fill(x, y + r, x + w, y + h - r, color);
-        for (int[] g : sh.solid) {
+        for (int[] g : solid) {
             c.fill(x + g[2], y + g[0], x + w - g[2], y + g[1], color);
             c.fill(x + g[2], y + h - g[1], x + w - g[2], y + h - g[0], color);
         }
-        corners(c, x, y, w, h, sh.aa, color, 4);
+        corners(c, x, y, w, h, two ? sh.aa2 : sh.aa, color, two ? 2 : 4);
     }
     private static void corners(DrawContext c, int x, int y, int w, int h, int[][] rects, int color, int levels) {
         int last = -1, col = 0;

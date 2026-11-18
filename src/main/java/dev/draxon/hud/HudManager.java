@@ -33,8 +33,8 @@ public final class HudManager {
         potions.xs = h.potionX; potions.ys = h.potionY; keys.xs = h.keysX; keys.ys = h.keysY;
         long ms = System.currentTimeMillis(); if (ms - lastRows > 200) { lastRows = ms; refreshRows(mc, h, chat); }
         if (h.watermark.get()) Watermark.render(c, mc, h, t, dt, sw, sh);
-        if (h.potionList.get()) potions.draw(c, t, s, sw, sh, chat); else potions.rw = 0;
-        if (h.keybinds.get()) keys.draw(c, t, s, sw, sh, chat); else keys.rw = 0;
+        potions.draw(c, t, s, sw, sh, chat, dt, h.potionList.get());
+        keys.draw(c, t, s, sw, sh, chat, dt, h.keybinds.get());
         if (chat) drag(mc, sw, sh); else dragging = null;
         if (h.notifications.get()) NotificationManager.render(c, h, t, dt, sw, sh);
     }
@@ -45,12 +45,13 @@ public final class HudManager {
             int secs = Math.max(0, e.getDuration() / 20);
             potions.add(e.getEffectType().value().getName().getString() + " " + (e.getAmplifier() + 1), e.isInfinite() ? "--" : (secs / 60) + ":" + (secs % 60 < 10 ? "0" : "") + (secs % 60), e.getEffectType().value().getColor() | 0xFF000000, false);
         }
-        if (potions.count == 0 && chat) { potions.add("Speed 2", "0:30", 0x7CAFC6, false); potions.add("Strength 1", "1:12", 0x932423, false); } // preview so it can be moved
+        if (potions.pending() == 0 && chat) { potions.add("Speed 2", "0:30", 0x7CAFC6, false); potions.add("Strength 1", "1:12", 0x932423, false); } // preview so it can be moved
         for (Module m : DraxonClient.modules.all()) {
             int k = m.bind.get(); if (k < 0 || (!m.isEnabled() && !h.keybindsAll.get())) continue;
             keys.add(m.name, "[" + KeybindSetting.keyName(k) + "]", m.isEnabled() ? DraxonClient.theme.acc() : DraxonClient.theme.disabled, !m.isEnabled());
         }
-        if (keys.count == 0 && chat) keys.add("Example", "[R]", DraxonClient.theme.acc(), false);
+        if (keys.pending() == 0 && chat) keys.add("Example", "[R]", DraxonClient.theme.acc(), false);
+        potions.commit(); keys.commit();
     }
 
     /** Mouse is polled (no mixin into ChatScreen): left button drags a panel by its body. Positions saved as screen ratios. */

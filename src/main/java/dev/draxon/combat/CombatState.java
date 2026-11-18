@@ -16,7 +16,8 @@ import net.minecraft.util.hit.EntityHitResult;
 public final class CombatState {
     private static long tick = 0, attackTick = -1, hurtTick = -1, claimTick = -1, lastAttackMs, lastTargetMs;
     private static float lastCooldown = 1f; private static int lastHurt, lastSlot = -1;
-    private static LivingEntity target; public static int combo;
+    private static LivingEntity target, hitTarget; public static int combo;
+    private static long hitTick = -1; private static boolean lastSprint, sprintAtHit;
     private static Object moveOwner; private static long moveUntil;
     private CombatState() {}
 
@@ -24,19 +25,26 @@ public final class CombatState {
         tick++;
         ClientPlayerEntity p = mc.player;
         if (p == null || mc.world == null) { reset(); return; }
+        boolean sprintPrev = lastSprint; lastSprint = p.isSprinting(); // sprint state of the previous tick = state when the attack was made
         int slot = p.getInventory().getSelectedSlot();
         float cd = p.getAttackCooldownProgress(0f);
         if (slot == lastSlot && cd < lastCooldown - 0.2f) { // slot change also resets the cooldown: ignored
             attackTick = tick; lastAttackMs = System.currentTimeMillis();
-            if (mc.crosshairTarget instanceof EntityHitResult h && h.getEntity() instanceof LivingEntity le) { target = le; lastTargetMs = lastAttackMs; combo++; }
+            sprintAtHit = sprintPrev;
+            if (mc.crosshairTarget instanceof EntityHitResult h && h.getEntity() instanceof LivingEntity le) { target = le; hitTarget = le; hitTick = tick; lastTargetMs = lastAttackMs; combo++; }
         }
         lastSlot = slot; lastCooldown = cd;
         if (p.hurtTime > lastHurt) { hurtTick = tick; combo = 0; }
         lastHurt = p.hurtTime;
         if (target != null && !target.isAlive()) { target = null; combo = 0; }
     }
-    public static void reset() { target = null; combo = 0; attackTick = hurtTick = claimTick = -1; lastCooldown = 1f; lastHurt = 0; lastSlot = -1; moveOwner = null; }
+    public static void reset() { target = hitTarget = null; hitTick = -1; lastSprint = sprintAtHit = false; combo = 0; attackTick = hurtTick = claimTick = -1; lastCooldown = 1f; lastHurt = 0; lastSlot = -1; moveOwner = null; }
 
+    /** An attack that landed on an entity under the crosshair this tick (air swings do not count). */
+    public static boolean hitThisTick() { return hitTick == tick; }
+    public static LivingEntity hitTarget() { return hitTarget; }
+    /** Whether the player was sprinting when the last attack was made (vanilla clears sprint right after a sprint hit). */
+    public static boolean sprintAtHit() { return sprintAtHit; }
     public static boolean attackedThisTick() { return attackTick == tick; }
     public static boolean hurtThisTick() { return hurtTick == tick; }
     /** True if the player attacked within the last {@code ms}. */

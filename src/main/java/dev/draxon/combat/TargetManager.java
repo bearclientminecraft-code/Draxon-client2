@@ -30,6 +30,7 @@ public final class TargetManager {
         if (!validate) return true;
         if (le.isSpectator() || !le.isAttackable() || le instanceof ArmorStandEntity) return false;
         if (ignoreTeam && p.isTeammate(e)) return false;
+        if (dev.draxon.core.FriendManager.isFriend(e)) return false; // friends are never targets
         TargetsModule t = DraxonClient.modules == null ? null : DraxonClient.modules.get(TargetsModule.class);
         if (le.isInvisible() && t != null && !t.invisible.get()) return false;
         if (le instanceof PlayerEntity) return t == null || t.players.get();

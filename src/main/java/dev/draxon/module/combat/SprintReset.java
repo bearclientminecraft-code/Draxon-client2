@@ -32,8 +32,10 @@ public class SprintReset extends Module {
         if (restore) { Keys.restore(mc, mc.options.sprintKey); CombatState.releaseMove(this); restore = false; return; }
         long now = System.currentTimeMillis();
         if (!pending) {
-            boolean ev = timing.get().equals("On Attack") ? CombatState.attackedThisTick() : CombatState.hurtThisTick();
-            if (!ev || !p.isSprinting()) return;
+            boolean onAttack = timing.get().equals("On Attack");
+            boolean ev = onAttack ? CombatState.hitThisTick() : CombatState.hurtThisTick();
+            // vanilla clears sprint right after a sprint hit, so the state at the moment of the hit is what counts
+            if (!ev || !(onAttack ? CombatState.sprintAtHit() : p.isSprinting())) return;
             if (swordCheck.get() && !CombatState.sword(p)) return;
             if (moveCheck.get() && !Keys.physical(mc, mc.options.forwardKey)) return;
             if (onlyAttack.get() && !CombatState.attackedRecently(1500)) return;
@@ -45,7 +47,7 @@ public class SprintReset extends Module {
         }
         if (now < due) return;
         pending = false;
-        if (!p.isSprinting() || !CombatState.acquireMove(this, 200)) return;
+        if (!CombatState.acquireMove(this, 200)) return;
         if (resetMode.get().equals("Packet") && p.networkHandler != null) {
             p.networkHandler.sendPacket(new ClientCommandC2SPacket(p, ClientCommandC2SPacket.Mode.STOP_SPRINTING));
             p.networkHandler.sendPacket(new ClientCommandC2SPacket(p, ClientCommandC2SPacket.Mode.START_SPRINTING));

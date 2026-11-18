@@ -4,6 +4,6 @@ import net.minecraft.client.MinecraftClient;
 
 /** Releases forward for Tap Duration after a hit so the next hit is a fresh sprint hit (sprint knockback). */
 public class WTap extends TapBase {
-    public WTap() { super("W-Tap"); }
+    public WTap() { super("W-Tap", 50, 200); }
     @Override protected void hold(MinecraftClient mc) { mc.options.forwardKey.setPressed(false); }
 }
